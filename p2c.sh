@@ -15,7 +15,7 @@
 # Change database connection accordingly
 # this is local instance with username and password root
 #
-COUCHDB_CONNECTION="http://root:root@127.0.0.1:5984"
+COUCHDB_CONNECTION="http://user:password@127.0.0.1:5984"
 
 #
 # Cleanup first
@@ -24,8 +24,8 @@ COUCHDB_CONNECTION="http://root:root@127.0.0.1:5984"
 # !!!DO NOT DO THIS IN PRODUCTION!!!
 # !!!THIS IS FOR TESTING PURPOSES!!!
 # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-curl -X DELETE $COUCHDB_CONNECTION/$2
-curl -X PUT $COUCHDB_CONNECTION/$2
+#curl -X DELETE $COUCHDB_CONNECTION/$2
+#curl -X PUT $COUCHDB_CONNECTION/$2
 
 #
 # How to use this tool
@@ -52,10 +52,14 @@ if [ $# -lt 3 ]; then
 fi
 
 #
-# TODO - Delete destination document if it exists
+# Delete destination document if it exists
 #
+REV=`curl -I HEAD -s "$COUCHDB_CONNECTION/$2/$3" | grep "ETag:" | sed 's/ETag: \"/rev=/g' | sed 's/\"//g'`
 
-
+if [[ ${REV} ]]; then
+    REV=${REV%$'\r'}
+    curl -vX DELETE  "$COUCHDB_CONNECTION/$2/$3?$REV"
+fi
 
 #
 # Create multipart/realted document
@@ -68,7 +72,7 @@ FIRST_ATTACHMENT=0
 
 
 echo -en '--5u930\r\ncontent-type: application/json\r\n\r\n' > h.txt
-echo -en '{\r\n\t"couchapp": "v0.0.1",\r\n\t"_attachments": {\r\n' >> h.txt
+echo -en '{\r\n\t"pushapp": "v0.0.1",\r\n\t"_attachments": {\r\n' >> h.txt
 
 for file in `find $1 -type f | sed 's:^./\(.*\)$:\1:'`; do
 
@@ -84,7 +88,10 @@ for file in `find $1 -type f | sed 's:^./\(.*\)$:\1:'`; do
 	
 	echo -en '\t\t"'$file'":{\r\n\t\t\t"follows":true,\r\n' >> h.txt
 	echo -en '\t\t\t"content_type":"'$MIME_TYPE'",\r\n' >> h.txt
-	echo -en '\t\t\t"length":'`stat --printf="%s" ./$file`'\r\n\t\t}' >> h.txt
+    # On linux
+	#echo -en '\t\t\t"length":'`stat --printf="%s" ./$file`'\r\n\t\t}' >> h.txt
+    # On MAC
+    echo -en '\t\t\t"length":'`stat -f "%z" ./$file`'\r\n\t\t}' >> h.txt
 	
 	# Print the content of the file in t.txt
 	echo -en '\r\n--5u930\r\n' >> t.txt
@@ -113,3 +120,6 @@ echo -en "\r\n--5u930--\r\n" >> h.txt
 curl -vX PUT $COUCHDB_CONNECTION/$2/$3 \
 -H 'Content-Type:  multipart/related; boundary="5u930"' --data-binary @h.txt
 
+# Cleanup
+rm t.txt
+rm h.txt
