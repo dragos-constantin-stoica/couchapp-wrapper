@@ -33,36 +33,36 @@ Inside each folder representing a design document the following subforder struct
 ```
 	test_db
 	      |_ app
-				|_ attachments
-					|... [JS CouchApp]
-					|... [source files]
+			|_ attachments
+				|... [JS CouchApp]
+				|... [source files]
 
-				|_ views
-					|_ lib
-						|_ lib_name
-							|_ lib_export_module.js
-					|_ view_name
-						|_ map.js
-						|_ reduce.js
+			|_ views
+				|_ lib
+					|_ lib_name
+						|_ lib_export_module.js
+				|_ view_name
+					|_ map.js
+					|_ reduce.js
 
-				|_ lists
-					|_ list_function.js
+			|_ lists
+				|_ list_function.js
 
-				|_ shows
-					|_ show_function.js
+			|_ shows
+				|_ show_function.js
 
-				|_ updates
-					|_ update_function.js
+			|_ updates
+				|_ update_function.js
 
-				|_ filters
-					|_ filter_function.js
+			|_ filters
+				|_ filter_function.js
 
-				|_ full_text
-					|_ index_name
-						|_ index.js
+			|_ full_text
+				|_ index_name
+					|_ index.js
 
-				|_ rewrites.js
-				|_ validate_doc_update.js
+			|_ rewrites.js
+			|_ validate_doc_update.js
 	      
 ```
 
