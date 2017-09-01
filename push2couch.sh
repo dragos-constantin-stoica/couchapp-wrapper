@@ -23,6 +23,7 @@ COUCHDB_PASSWORD=""
 COUCHDB_CONNECTION=""
 
 COUCHDB_DATABASE=""
+REV=""
 declare -a TMP_FILES=('_head.txt' '_tail.txt'); 
 
 #
@@ -122,80 +123,97 @@ usage()
 }
 
 
-
-moloz()
+#
+# Auxiliary function to push attachments to a design document
+# The first argument is the directory where the files are
+# The second argument is the design document name
+push_attachments()
 {
-#
-# Cleanup temporary files
-#
-del_tmp_files
+	#
+	# Cleanup temporary files
+	#
+	del_tmp_files
 
 
-#
-# Create multipart/realted document
-#
+	#
+	# Create multipart/realted document
+	#
 
 
-FIRST_ATTACHMENT=0
+	FIRST_ATTACHMENT=0
 
 
-echo -en '--5u930\r\ncontent-type: application/json\r\n\r\n' > h.txt
-echo -en '{\r\n\t"pushapp": "v0.0.1",\r\n\t"_attachments": {\r\n' >> h.txt
+	echo -en '--5u930\r\ncontent-type: application/json\r\n\r\n' > ${TMP_FILES[0]}
+	echo -en '{\r\n\t"pushapp": "v0.0.1",\r\n\t"_attachments": {\r\n' >> ${TMP_FILES[0]}
 
-for file in `find $1 -type f | sed 's:^./\(.*\)$:\1:'`; do
+	for file in `find $1 -type f | sed 's:^./\(.*\)$:\1:'`; do
 
-	echo $file
-	if [ $FIRST_ATTACHMENT -eq 0 ]; then
-		FIRST_ATTACHMENT=1
+		#echo $file
+		attachment_name=`echo $file| sed 's:'$1'/::g'`
+		#echo $attachment_name
+
+		if [ $FIRST_ATTACHMENT -eq 0 ]; then
+			FIRST_ATTACHMENT=1
+		else
+			echo -en ",\r\n" >> ${TMP_FILES[0]}
+			
+		fi
+		
+		MIME_TYPE=`file -b --mime-type ./$file`
+		#
+		# FIX for css mime-type
+		# put text/css instead of text/plain
+		#
+		if [ "${file##*.}" = "css"  ]; then
+			MIME_TYPE="text/css"
+		fi
+		echo -en '\t\t"'$attachment_name'":{\r\n\t\t\t"follows":true,\r\n' >> ${TMP_FILES[0]}
+		echo -en '\t\t\t"content_type":"'$MIME_TYPE'",\r\n' >> ${TMP_FILES[0]}
+		# On linux
+		echo -en '\t\t\t"length":'`stat --printf="%s" ./$file`'\r\n\t\t}' >> ${TMP_FILES[0]}
+		# On MAC
+		#echo -en '\t\t\t"length":'`stat -f "%z" ./$file`'\r\n\t\t}' >> ${TMP_FILES[0]}
+		
+		# Print the content of the file in ${TMP_FILES[1]}
+		echo -en '\r\n--5u930\r\n' >> ${TMP_FILES[1]}
+		if [ "$MIME_TYPE" != "text/plain" ]; then 
+			echo -en 'Content-Type: '$MIME_TYPE >> ${TMP_FILES[1]}
+			echo -en '\r\nContent-transfer-encoding: '`file -b --mime-encoding ./$file`'\r\n\r\n' >> ${TMP_FILES[1]}
+		else
+			echo -en '\r\n' >> ${TMP_FILES[1]}
+		fi
+		cat ./$file >> ${TMP_FILES[1]}
+
+	done
+
+	echo -en '\r\n\t}\r\n}\r\n' >> ${TMP_FILES[0]}
+
+	# Concatenate h and t
+	cat ${TMP_FILES[1]} >> ${TMP_FILES[0]}
+
+	# Close mulipart/realted document
+	echo -en "\r\n--5u930--\r\n" >> ${TMP_FILES[0]}
+
+	#
+	# Write document to the database
+	#
+	REV=`curl -I HEAD -s "$COUCHDB_CONNECTION/$COUCHDB_DATABASE/$2" | grep "ETag:" | sed 's/ETag: \"/rev=/g' | sed 's/\"//g'`
+	if [[ ${REV} ]]; then
+		REV=${REV%$'\r'}
+		curl -vX PUT $COUCHDB_CONNECTION/$COUCHDB_DATABASE/$2?$REV \
+		-H 'Content-Type:  multipart/related; boundary="5u930"' --data-binary @${TMP_FILES[0]}
 	else
-		echo -en ",\r\n" >> h.txt
-		 
+		curl -vX PUT $COUCHDB_CONNECTION/$COUCHDB_DATABASE/$2 \
+		-H 'Content-Type:  multipart/related; boundary="5u930"' --data-binary @${TMP_FILES[0]}
 	fi
-	
-	MIME_TYPE=`file -b --mime-type ./$file`
-	
-	echo -en '\t\t"'$file'":{\r\n\t\t\t"follows":true,\r\n' >> h.txt
-	echo -en '\t\t\t"content_type":"'$MIME_TYPE'",\r\n' >> h.txt
-    # On linux
-	echo -en '\t\t\t"length":'`stat --printf="%s" ./$file`'\r\n\t\t}' >> h.txt
-    # On MAC
-    #echo -en '\t\t\t"length":'`stat -f "%z" ./$file`'\r\n\t\t}' >> h.txt
-	
-	# Print the content of the file in t.txt
-	echo -en '\r\n--5u930\r\n' >> t.txt
-	if [ "$MIME_TYPE" != "text/plain" ]; then 
-		echo -en 'Content-Type: '$MIME_TYPE >> t.txt
-		echo -en '\r\nContent-transfer-encoding: '`file -b --mime-encoding ./$file`'\r\n\r\n' >> t.txt
-	else
-		echo -en '\r\n' >> t.txt
-	fi
-	cat ./$file >> t.txt
 
-done
-
-echo -en '\r\n\t}\r\n}\r\n' >> h.txt
-
-# Concatenate h and t
-cat t.txt >> h.txt
-
-# Close mulipart/realted document
-echo -en "\r\n--5u930--\r\n" >> h.txt
-
-#
-# Write document to the database
-#
-
-curl -vX PUT $COUCHDB_CONNECTION/$2/$3 \
--H 'Content-Type:  multipart/related; boundary="5u930"' --data-binary @h.txt
-
-# Cleanup temporary files
-del_tmp_files
+	# Cleanup temporary files
+	del_tmp_files
 }
 
-
-#
-# The main script
-#
+###################
+# The main script #
+###################
 
 #
 # Check if at leas 2 arguments were passed
@@ -280,23 +298,34 @@ for ddoc in `find ${COUCHDB_DATABASE}/ -maxdepth 1 -type d | sed 's/'${COUCHDB_D
 	fi
 	
 	#
-	# Explore the structure of the desing document folder and 
-	# compose the document
+	# Explore the structure of the design document folder and compose the document
 	#
 	
 	#
 	# Look for attachments subfolder
 	#
 	
-	if [ -e "$DDOC_NAME/attachments" ]; then
-	
+	if [ -e "$COUCHDB_DATABASE/$ddoc/attachments" ]; then
+		push_attachments $COUCHDB_DATABASE"/"$ddoc"/attachments" $DDOC_NAME
 	fi
 	
-	
+	#
+	# Look for ddoc.json containing the JavaScript code
+	#
+	if [ -f "$COUCHDB_DATABASE/$ddoc/ddoc.json"  ]; then
+		REV=`curl -I HEAD -s "$COUCHDB_CONNECTION/$COUCHDB_DATABASE/$DDOC_NAME" | grep "ETag:" | sed 's/ETag: \"/rev=/g' | sed 's/\"//g'`
+
+		if [[ ${REV} ]]; then
+			REV=${REV%$'\r'}
+			# Update existing document
+		else
+			# New document
+		fi
+
+	fi
+
 done	
 
-exit 5
-
-#
-# End of Main script
-#
+######################
+# End of Main script #
+######################
