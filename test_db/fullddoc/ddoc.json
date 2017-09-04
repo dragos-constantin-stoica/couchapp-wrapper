@@ -1,10 +1,119 @@
 {
     "language": "javascript",
-    "rewrites":
-    {
-        "from": "/index.html",
-        "to": "/_design/app/index.html",
-        "method": "GET",
-        "query": {}
+    "views": {
+        "allDocs":{
+            "map": "function(doc){
+                emit(doc._id, doc._rev);
+            }"
+        },
+        "lib": {
+            "security": "function user_context(userctx, secobj) {
+                var is_admin = function() {
+                  return userctx.indexOf('_admin') != -1;
+                }
+                return {'is_admin': is_admin}
+              }
+              
+              exports['user'] = user_context"
+         }
+    },
+    "lists":{
+        "toJSONArray":"function(head, req) {
+            provides('json', function() {
+                var result=[];
+                while (row = getRow()) {
+                    result.push(row.key);
+                }   
+                return JSON.stringify(result);
+            }); 
+        }"
+    },
+    "updates":{
+        "upsert":"function(doc, req){
+            if (!doc){
+                if ('id' in req && req['id']){
+                    // insert-create new document
+                    return [{'_id': req['id'], 'type':'mail', 'created_by':req['userCtx']['name']}, 'New World']
+                }
+                // change nothing in database
+                return [null, 'Empty World']
+            }
+            //Update existing document
+            doc['type'] = 'mail';
+            doc['edited_by'] = req['userCtx']['name']
+            return [doc, 'Edited World!']
+        }"
+    },
+    "shows":{
+        "toJSON": "function(doc, req){
+            return {
+              'json': {
+                'id': doc['_id'],
+                'rev': doc['_rev']
+              }
+            }
+          }"
+    },
+    "filters":{
+        "mailOnly":"function(doc, req){
+            // we filter only mail documents
+            if (doc.type == 'mail'){
+              return true;
+            }
+            return false; // did not pass!
+          }"
+    },
+    "validate_doc_updates":"function(newDoc, oldDoc, userCtx) {
+        if (newDoc.type === undefined) {
+            throw({forbidden: 'Document must have a type.'});
+        }
+
+        if (newDoc.author) {
+          enforce(newDoc.author == userCtx.name,
+            'You may only update documents with author ' + userCtx.name);
+        }
+        //see views lib export for CommonJS module
+        user = require('lib/security').user(userctx, secobj);
+        return user.is_admin();
+      }",
+    "rewrites":[
+        {
+            "from": "/index.html",
+            "to": "../../_design/app/index.html",
+            "method": "GET",
+            "query": {}
+        }
+    ],
+    "fulltext": {
+        "allFields": {
+            "index":"function(doc) {
+                var ret = new Document();
+            
+                function idx(obj) {
+                    for (var key in obj) {
+                        switch (typeof obj[key]) {
+                        case 'object':
+                            idx(obj[key]);
+                            break;
+                        case 'function':
+                        break;
+                        default:
+                            ret.add(obj[key]);
+                        break;
+                        }
+                    }
+                };
+            
+                idx(doc);
+            
+                if (doc._attachments) {
+                    for (var i in doc._attachments) {
+                        ret.attachment('default', i);
+                    }
+                }
+            
+                return ret;
+            }"
+        }
     }
 }

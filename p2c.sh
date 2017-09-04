@@ -33,14 +33,14 @@ COUCHDB_CONNECTION="http://user:password@127.0.0.1:5984"
 usage()
 {
 	echo "Push to CouchDB tool usage:"
-	echo "p2c.sh [folder_path] [destination_database] [document_name]"
+	echo "$0 [folder_path] [destination_database] [document_name]"
 	echo ""
 	echo "All files from [folder_path] including subfolders"
 	echo "will be uploaded as attachments to [document_name]"
 	echo "in the [destination_database]"
 	echo "-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~"
 	echo "Example:"
-	echo "./p2c.sh ./app db_test _design/app"
+	echo "$0 ./app db_test _design/app"
  
 	return
 }

@@ -169,10 +169,13 @@ push_attachments()
 		fi
 		echo -en '\t\t"'$attachment_name'":{\r\n\t\t\t"follows":true,\r\n' >> ${TMP_FILES[0]}
 		echo -en '\t\t\t"content_type":"'$MIME_TYPE'",\r\n' >> ${TMP_FILES[0]}
-		# On linux
-		echo -en '\t\t\t"length":'`stat --printf="%s" ./$file`'\r\n\t\t}' >> ${TMP_FILES[0]}
-		# On MAC
-		#echo -en '\t\t\t"length":'`stat -f "%z" ./$file`'\r\n\t\t}' >> ${TMP_FILES[0]}
+		case "$OSTYPE" in
+			solaris*) echo "SOLARIS" ;;
+			darwin*)  echo -en '\t\t\t"length":'`stat -f "%z" ./$file`'\r\n\t\t}' >> ${TMP_FILES[0]} ;; 
+			linux*)   echo -en '\t\t\t"length":'`stat --printf="%s" ./$file`'\r\n\t\t}' >> ${TMP_FILES[0]} ;;
+			bsd*)     echo "BSD" ;;
+			*)        echo "unknown: $OSTYPE" ;;
+		esac
 		
 		# Print the content of the file in ${TMP_FILES[1]}
 		echo -en '\r\n--5u930\r\n' >> ${TMP_FILES[1]}
@@ -318,8 +321,14 @@ for ddoc in `find ${COUCHDB_DATABASE}/ -maxdepth 1 -type d | sed 's/'${COUCHDB_D
 		if [[ ${REV} ]]; then
 			REV=${REV%$'\r'}
 			# Update existing document
+			curl -vX PUT $COUCHDB_CONNECTION/$COUCHDB_DATABASE/$DDOC_NAME?$REV \
+		-H 'Content-Type:  application/json' -H 'Accept: application/json' \
+		-H 'Accept: text/plain' -d @$COUCHDB_DATABASE/$ddoc/ddoc.json
 		else
 			# New document
+			curl -vX PUT $COUCHDB_CONNECTION/$COUCHDB_DATABASE/$DDOC_NAME \
+		-H 'Content-Type:  application/json' -H 'Accept: application/json' \
+		-H 'Accept: text/plain' -d @$COUCHDB_DATABASE/$ddoc/ddoc.json
 		fi
 
 	fi
