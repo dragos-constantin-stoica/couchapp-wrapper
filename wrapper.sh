@@ -16,7 +16,7 @@ SERVERS[test_db]=apiatest.couchdb
 SERVERS[prod_db]=apia2014.couchdb
 SERVERS[localhost]=127.0.0.1
 declare -A FOLDERS
-# name of folder on local repository whre design documents are stored
+# name of folder on local repository where design documents are stored
 FOLDERS[test_db]="_teste"
 FOLDERS[prod_db]=""
 FOLDERS[localhost]="_local"
@@ -26,17 +26,14 @@ database=""
 
 usage()
 {
-	echo "Example usage:"
+	echo "Usage:"
 	echo "$0 clone [source_server] [dbname] [all|view_name]"
 	echo "$0 push  [destination_server] [dbname] [all|view_name]"
 	echo "$0 deploy [source_server]  [destination_server]"
 	echo "$0 copy [source_server]  [destination_server] [dbname] [view_name]"
 	echo "where:"
 	echo "[dbname] = bd2012 | bd2012_esantionare"
-	echo "[source_server],[destination_server] = localhost | teste | productie"
-	echo "$0 clone teste bd2012 all"
-	echo "$0 push localhost bd2012 all" 
-	echo "$0 deploy productie teste" 
+	echo "[source_server],[destination_server] = localhost | test_db | prod_db"
 	echo "-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~"
 	return
 }
@@ -44,91 +41,91 @@ usage()
 # Auxiliary function for view cloning
 clone_view()
 {
-echo "Clone view: $1, from database: $database, server: $server"
-if [ "$1" = "all" ]; then
-	VIEWS=`curl --request GET -s "http://$server:5984/$database/_all_docs?startkey=%22_design/%22&endkey=%22_design0%22" | awk '{FS="[\":\"]+";if($2 == "id") print $3}'`
-	for VIEW in $VIEWS
-	do
-		#echo "cloing view: ${VIEW}"
-		couchapp clone http://$server:5984/$database/${VIEW} ./${VIEW} >/dev/null 2>&1
-	done
-else
-	couchapp clone http://$server:5984/$database/$1 $1 >/dev/null 2>&1
-fi
+	echo "Clone view: $1, from database: $database, server: $server"
+	if [ "$1" = "all" ]; then
+		VIEWS=`curl --request GET -s "http://$server:5984/$database/_all_docs?startkey=%22_design/%22&endkey=%22_design0%22" | awk '{FS="[\":\"]+";if($2 == "id") print $3}'`
+		for VIEW in $VIEWS
+		do
+			#echo "cloing view: ${VIEW}"
+			couchapp clone http://$server:5984/$database/${VIEW} ./${VIEW} >/dev/null 2>&1
+		done
+	else
+		couchapp clone http://$server:5984/$database/$1 $1 >/dev/null 2>&1
+	fi
 }
 
 # Auxiliary function for pushing document to database
 push_view()
 {
-echo "Push view: $1, in database: $database, server: $server"
-#pentru test_db pe localhost
-#server=$localhost
+	echo "Push view: $1, in database: $database, server: $server"
+	#pentru test_db pe localhost
+	#server=$localhost
 
-if [ "$1" = "all" ]; then
-	DIRS=`ls -l --time-style="long-iso" ./_design | egrep '^d' | awk '{print $8}'`
-	# "ls -l $MYDIR"      = get a directory listing
-	# "| egrep '^d'"           = pipe to egrep and select only the directories
-	# "awk '{print $8}'" = pipe the result from egrep to awk and print only the 8th field
-	# and now loop through the directories:
-	filename="../TMP_`date +%Y-%m-%d_%H-%M-%S`.sh"
-	touch $filename
-	chmod -cf a+x $filename
-	echo "#!/bin/bash" >> $filename	
-	urls=""
-	compacturls=""
-	for DIR in $DIRS
-	do
-		couchapp push _design/${DIR} http://$server:5984/$database >/dev/null 2>&1
-		curl -X PUT http://$server:5984/$database/_design/updateDosar/_update/delCouchapp/_design/${DIR} >/dev/null 2>&1
-		if [ -d ./_design/${DIR}/views ]; then
-			echo "# _design/${DIR} has at least one view, call it for index refresh" >> $filename
-			viewname=`ls -1 ./_design/${DIR}/views/ | head -1`
-			urls=$urls${DIR}"/_view/"$viewname","
-			compacturls=$compacturls${DIR}"," 
+	if [ "$1" = "all" ]; then
+		DIRS=`ls -l --time-style="long-iso" ./_design | egrep '^d' | awk '{print $8}'`
+		# "ls -l $MYDIR"      = get a directory listing
+		# "| egrep '^d'"           = pipe to egrep and select only the directories
+		# "awk '{print $8}'" = pipe the result from egrep to awk and print only the 8th field
+		# and now loop through the directories:
+		filename="../TMP_`date +%Y-%m-%d_%H-%M-%S`.sh"
+		touch $filename
+		chmod -cf a+x $filename
+		echo "#!/bin/bash" >> $filename	
+		urls=""
+		compacturls=""
+		for DIR in $DIRS
+		do
+			couchapp push _design/${DIR} http://$server:5984/$database >/dev/null 2>&1
+			curl -X PUT http://$server:5984/$database/_design/updateDosar/_update/delCouchapp/_design/${DIR} >/dev/null 2>&1
+			if [ -d ./_design/${DIR}/views ]; then
+				echo "# _design/${DIR} has at least one view, call it for index refresh" >> $filename
+				viewname=`ls -1 ./_design/${DIR}/views/ | head -1`
+				urls=$urls${DIR}"/_view/"$viewname","
+				compacturls=$compacturls${DIR}"," 
+			fi
+			if [ -d ./_design/${DIR}/fulltext ]; then
+				echo "# _design/${DIR} has at least one lucene index, call for optimization" >> $filename
+				VIEWS=`ls -1 ./_design/${DIR}/fulltext/ | awk 'BEGIN{FS="."};{print $1}'`
+				for viewname in $VIEWS
+				do
+					echo "# background execution: http://$server:5984/_fti/productie/$database/_design/${DIR}/${viewname}/_expunge si _optimize" >> $filename
+					echo "curl -X POST -s \"http://$server:5984/_fti/productie/$database/_design/${DIR}/${viewname}/_expunge\" >/dev/null 2>&1" >> $filename
+					echo "curl -X POST -s \"http://$server:5984/_fti/productie/$database/_design/${DIR}/${viewname}/_optimize\" >/dev/null 2>&1" >> $filename
+				done
+			fi
+		done
+
+		urls=${urls%?}
+		compacturls=${compacturls%?} 
+
+		echo "# background execution: http://$server:5984/$database/_design/${DIR}/_view/$viewname" >> $filename			
+		echo "curl -X GET -s \"http://$server:5984/$database/_design/{$urls}\" >/dev/null 2>&1" >> $filename
+		echo "curl -H \"Content-Type: application/json\" -X POST  \"http://$server:5984/$database/_compact/{$compacturls}\" >/dev/null 2>&1" >> $filename
+
+		echo "#delete this file after issuing all commands" >> $filename
+		echo "rm -rf $filename" >> $filename
+		/bin/bash $filename &
+	else
+		couchapp push $1 http://$server:5984/$database >/dev/null 2>&1
+		curl --request PUT http://$server:5984/$database/_design/updateDosar/_update/delCouchapp/$1 >/dev/null 2>&1
+		if [ -d ./$1/views ]; then
+			echo "# $1 has at least a view, call it for reindexing" >> $filename
+			viewname=`ls -1 ./$1/views/ | head -1`
+			echo "# background execution: http://$server:5984/$database/$1/_view/$viewname" >> $filename
+			echo "curl -X GET -s \"http://$server:5984/$database/$1/_view/$viewname\" >/dev/null 2>&1" >> $filename
+			echo "curl -H \"Content-Type: application/json\" -X POST  \"http://$server:5984/$database/_compact/$1\" " >> $filename
 		fi
-		if [ -d ./_design/${DIR}/fulltext ]; then
-			echo "# _design/${DIR} has at least one lucene index, call for optimization" >> $filename
-			VIEWS=`ls -1 ./_design/${DIR}/fulltext/ | awk 'BEGIN{FS="."};{print $1}'`
-			for viewname in $VIEWS
-			do
-				echo "# background execution: http://$server:5984/_fti/productie/$database/_design/${DIR}/${viewname}/_expunge si _optimize" >> $filename
-				echo "curl -X POST -s \"http://$server:5984/_fti/productie/$database/_design/${DIR}/${viewname}/_expunge\" >/dev/null 2>&1" >> $filename
-				echo "curl -X POST -s \"http://$server:5984/_fti/productie/$database/_design/${DIR}/${viewname}/_optimize\" >/dev/null 2>&1" >> $filename
-			done
+		if [ -d ./$1/fulltext ]; then
+			echo "# $1 has at least a lucene index, call for optimzation" >> $filename
+			viewname=`ls -1 ./$1/fulltext/ | head -1 | awk 'BEGIN{ FS = "."}; {print $1}'`
+			echo "# background execution: http://$server:5984/_fti/productie/$database/$1/$viewname/_optimize" >> $filename
+			echo "curl -X POST -s \"http://$server:5984/_fti/productie/$database/$1/$viewname/_expunge\" >/dev/null 2>&1" >> $filename
+			echo "curl -X POST -s \"http://$server:5984/_fti/productie/$database/$1/$viewname/_optimize\" >/dev/null 2>&1" >> $filename
 		fi
-	done
-
-	urls=${urls%?}
-	compacturls=${compacturls%?} 
-
-	echo "# background execution: http://$server:5984/$database/_design/${DIR}/_view/$viewname" >> $filename			
-	echo "curl -X GET -s \"http://$server:5984/$database/_design/{$urls}\" >/dev/null 2>&1" >> $filename
-	echo "curl -H \"Content-Type: application/json\" -X POST  \"http://$server:5984/$database/_compact/{$compacturls}\" >/dev/null 2>&1" >> $filename
-
-	echo "#delete this file after issuing all commands" >> $filename
-	echo "rm -rf $filename" >> $filename
-	/bin/bash $filename &
-else
-	couchapp push $1 http://$server:5984/$database >/dev/null 2>&1
-	curl --request PUT http://$server:5984/$database/_design/updateDosar/_update/delCouchapp/$1 >/dev/null 2>&1
-	if [ -d ./$1/views ]; then
-		echo "# $1 has at least a view, call it for reindexing" >> $filename
-		viewname=`ls -1 ./$1/views/ | head -1`
-		echo "# background execution: http://$server:5984/$database/$1/_view/$viewname" >> $filename
-		echo "curl -X GET -s \"http://$server:5984/$database/$1/_view/$viewname\" >/dev/null 2>&1" >> $filename
-		echo "curl -H \"Content-Type: application/json\" -X POST  \"http://$server:5984/$database/_compact/$1\" " >> $filename
+		echo "#delete this file after issuing all commands" >> $filename
+		echo "rm -rf $filename" >> $filename
+		/bin/bash $filename &
 	fi
-	if [ -d ./$1/fulltext ]; then
-		echo "# $1 has at least a lucene index, call for optimzation" >> $filename
-		viewname=`ls -1 ./$1/fulltext/ | head -1 | awk 'BEGIN{ FS = "."}; {print $1}'`
-		echo "# background execution: http://$server:5984/_fti/productie/$database/$1/$viewname/_optimize" >> $filename
-		echo "curl -X POST -s \"http://$server:5984/_fti/productie/$database/$1/$viewname/_expunge\" >/dev/null 2>&1" >> $filename
-		echo "curl -X POST -s \"http://$server:5984/_fti/productie/$database/$1/$viewname/_optimize\" >/dev/null 2>&1" >> $filename
-	fi
-	echo "#delete this file after issuing all commands" >> $filename
-	echo "rm -rf $filename" >> $filename
-	/bin/bash $filename &
-fi
 }
 
 #
@@ -263,22 +260,10 @@ fi
 #echo $1, $2, $3, $4
 
 case $1 in
-	"clone") 
-#  		 	 echo "clone command"
-			 clone $2 $3 $4 
-			 ;;
-	"push") 
-#			echo "push command"
-			push $2 $3 $4
-			;;
-	"deploy") 
-#			echo "deploy deploy command"
-			deploy $2 $3
-			;;
-	"copy") 
-#			echo "copy command"
-			copy $2 $3 $4 $5
-			;;
+	"clone")  clone $2 $3 $4 ;;
+	"push")   push $2 $3 $4	;;
+	"deploy") deploy $2 $3	;;
+	"copy")   copy $2 $3 $4 $5 ;;
 	*)      echo "unknown command: $1"
 			usage ;;
 esac
