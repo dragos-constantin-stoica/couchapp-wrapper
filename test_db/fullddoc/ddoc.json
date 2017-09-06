@@ -63,7 +63,7 @@
             return false; // did not pass!
           }"
     },
-    "validate_doc_updates":"function(newDoc, oldDoc, userCtx) {
+    "validate_doc_update":"function(newDoc, oldDoc, userCtx) {
         if (newDoc.type === undefined) {
             throw({forbidden: 'Document must have a type.'});
         }
