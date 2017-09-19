@@ -95,7 +95,7 @@ curl -X PUT http://localhost:5984/proxy-replication
 
 ### Usage
 
-Open in your browser the follwoing link: [http://localhost:5984/proxy-replication/_design/app/index.html] and fill-in the remote and local databases to be replicated, then click Replicate button.
+Open in your browser the follwoing link: [http://localhost:5984/proxy-replication/_design/app/index.html](http://localhost:5984/proxy-replication/_design/app/index.html) and fill-in the remote and local databases to be replicated, then click Replicate button.
 You will see the replication process log on your page.
 
 Enjoy!
