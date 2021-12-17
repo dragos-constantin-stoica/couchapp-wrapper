@@ -31,11 +31,12 @@ declare -a TMP_FILES=('_head.txt' '_tail.txt');
 #
 build_couchdb_connection()
 {
-	if [[ ${COUCHDB_USER} ]] && [[ ${COUCHDB_PASSWORD} ]]; then
+	if [[ -z "$COUCHDB_USER" ]] && [[ -z "$COUCHDB_PASSWORD" ]]; then
 		COUCHDB_CONNECTION=$COUCHDB_PROTOCOL"://"$COUCHDB_SERVER":"$COUCHDB_PORT
 	else
 		COUCHDB_CONNECTION=$COUCHDB_PROTOCOL"://"$COUCHDB_USER":"$COUCHDB_PASSWORD"@"$COUCHDB_SERVER":"$COUCHDB_PORT
 	fi
+	#echo $COUCHDB_CONNECTION
 }
 
 #
@@ -129,19 +130,10 @@ usage()
 # The second argument is the design document name
 push_attachments()
 {
-	#
 	# Cleanup temporary files
-	#
 	del_tmp_files
-
-
-	#
 	# Create multipart/realted document
-	#
-
-
 	FIRST_ATTACHMENT=0
-
 
 	echo -en '--5u930\r\ncontent-type: application/json\r\n\r\n' > ${TMP_FILES[0]}
 	echo -en '{\r\n\t"pushapp": "v0.0.1",\r\n\t"_attachments": {\r\n' >> ${TMP_FILES[0]}
